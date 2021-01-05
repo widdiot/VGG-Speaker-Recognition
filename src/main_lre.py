@@ -51,14 +51,14 @@ def main():
     #       Get Train/Val.
     # ==================================
 
-    trnlist, trnlb = toolkits.load_from_kaldi_dir(args, "train")
-    vallist, vallb = toolkits.load_from_kaldi_dir(args, "test")
+    trnlist, trnlb, l2i = toolkits.load_from_kaldi_dir(args, "train")
+    vallist, vallb, _ = toolkits.load_from_kaldi_dir(args, "test", l2i)
 
     # construct the data generator.
     params = {'dim': (40, 500, 1),
               'mp_pooler': toolkits.set_mp(processes=args.multiprocess),
               'nfft': 512,
-              'spec_len': 250,
+              'spec_len': 500,
               'win_length': 400,
               'hop_length': 160,
               'n_classes': 10,

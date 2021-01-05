@@ -93,6 +93,8 @@ def vggvox_resnet2d_icassp(input_dim=(257, 250, 1), num_class=8631, mode='train'
     # ===============================================
     #            Fully Connected Block 1
     # ===============================================
+#    print("inputs:",inputs.shape)
+#    print("X:",x.shape)
     x_fc = keras.layers.Conv2D(bottleneck_dim, (7, 1),
                                strides=(1, 1),
                                activation='relu',
@@ -101,7 +103,7 @@ def vggvox_resnet2d_icassp(input_dim=(257, 250, 1), num_class=8631, mode='train'
                                kernel_regularizer=keras.regularizers.l2(weight_decay),
                                bias_regularizer=keras.regularizers.l2(weight_decay),
                                name='x_fc')(x)
-
+#    print(x_fc.shape)
     # ===============================================
     #            Feature Aggregation
     # ===============================================

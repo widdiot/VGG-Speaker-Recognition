@@ -62,7 +62,7 @@ def identity_block_2D(input_tensor, kernel_size, filters, stage, block, trainabl
     return x
 
 
-def conv_block_2D(input_tensor, kernel_size, filters, stage, block, strides=(2, 2), trainable=True):
+def conv_block_2D(input_tensor, kernel_size, filters, stage, block, strides=(1, 2), trainable=True):
     """A block that has a conv layer at shortcut.
     # Arguments
         input_tensor: input tensor
@@ -135,7 +135,8 @@ def resnet_2D_v1(input_dim, mode='train'):
     # ===============================================
     #            Convolution Block 1
     # ===============================================
-    x1 = Conv2D(64, (7, 7),
+#    print("inputs",inputs.shape)
+    x1 = Conv2D(64, (3, 3),
                 kernel_initializer='orthogonal',
                 use_bias=False, trainable=True,
                 kernel_regularizer=l2(weight_decay),
@@ -145,31 +146,34 @@ def resnet_2D_v1(input_dim, mode='train'):
     x1 = BatchNormalization(axis=bn_axis, name='conv1_1/3x3_s1/bn', trainable=True)(x1)
     x1 = Activation('relu')(x1)
     x1 = MaxPooling2D((2, 2), strides=(2, 2))(x1)
-
+#    print("x1",x1.shape)
     # ===============================================
     #            Convolution Section 2
     # ===============================================
     x2 = conv_block_2D(x1, 3, [48, 48, 96], stage=2, block='a', strides=(1, 1), trainable=True)
     x2 = identity_block_2D(x2, 3, [48, 48, 96], stage=2, block='b', trainable=True)
-
+#    print("x2",x2.shape)
     # ===============================================
     #            Convolution Section 3
     # ===============================================
     x3 = conv_block_2D(x2, 3, [96, 96, 128], stage=3, block='a', trainable=True)
     x3 = identity_block_2D(x3, 3, [96, 96, 128], stage=3, block='b', trainable=True)
     x3 = identity_block_2D(x3, 3, [96, 96, 128], stage=3, block='c', trainable=True)
+#    print("x3",x3.shape)
     # ===============================================
     #            Convolution Section 4
     # ===============================================
     x4 = conv_block_2D(x3, 3, [128, 128, 256], stage=4, block='a', trainable=True)
     x4 = identity_block_2D(x4, 3, [128, 128, 256], stage=4, block='b', trainable=True)
     x4 = identity_block_2D(x4, 3, [128, 128, 256], stage=4, block='c', trainable=True)
+#    print("x4",x4.shape)
     # ===============================================
     #            Convolution Section 5
     # ===============================================
-    x5 = conv_block_2D(x4, 3, [256, 256, 512], stage=5, block='a', trainable=True)
+    x5 = conv_block_2D(x4, 3, [256, 256, 512], stage=5, block='a', strides=(1, 2), trainable=True)
     x5 = identity_block_2D(x5, 3, [256, 256, 512], stage=5, block='b', trainable=True)
     x5 = identity_block_2D(x5, 3, [256, 256, 512], stage=5, block='c', trainable=True)
+#    print("x5",x5.shape)
     y = MaxPooling2D((3, 1), strides=(2, 1), name='mpool2')(x5)
     return inputs, y
 

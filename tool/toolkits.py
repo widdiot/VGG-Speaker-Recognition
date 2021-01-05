@@ -6,7 +6,7 @@ import numpy as np
 # vallist, vallb = toolkits.get_voxceleb2_datalist(args, path='../meta/voxlb2_val.txt')
 
 
-def load_from_kaldi_dir(args, part):
+def load_from_kaldi_dir(args, part, label2idx=None):
     utt2feat_path = {}
     with open(os.path.join(args.data_path, part, 'feats.scp'), 'r') as f:
         lines = f.read().splitlines()
@@ -26,12 +26,18 @@ def load_from_kaldi_dir(args, part):
             utt2label[l.split()[0]] = l.split()[1]
     labels = list(set(utt2label.values()))
     print("all labels found were \n", labels, '\n')
-    label2idx = {}
-    for i, l in enumerate(labels):
-        label2idx[l] = i
+    if not label2idx:
+        label2idx = {}
+        for i, l in enumerate(labels):
+            label2idx[l] = i
     print("Mapping: \n", label2idx)
-    data = [(utt2feat_path[i], label2idx[utt2label[i]]) for i in utt2feat_path.keys()]
-    return data
+    data = ([],[])
+    for i in utt2feat_path.keys():
+        data[0].append(utt2feat_path[i])
+        data[1].append(label2idx[utt2label[i]])
+    print("head(X):",data[0][:4],"\nhead(Y):",data[1][:4])
+    return np.array(data[0]), np.array(data[1]), label2idx
+
 
 def initialize_GPU(args):
     # Initialize GPUs

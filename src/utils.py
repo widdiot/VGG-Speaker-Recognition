@@ -79,4 +79,5 @@ def load_kaldi_feat(path, spec_len, mode='train'):
     else:
         feat_T_trunc = feat_T
     # no need for normalization because, we perform normalization and vad in kaldi
+    #print("feat_T_trunc:",feat_T_trunc.shape)
     return feat_T_trunc
