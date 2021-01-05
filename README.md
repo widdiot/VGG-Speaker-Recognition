@@ -5,7 +5,12 @@ This repo has been modiefied to load preprocessed data from kaldi directory, dep
 - Generate Mfcc (or any other feats in kaldi).
 - Perform Vad.
 - Remove unvoiced frames and perform cmvn.
-- Then train the model using main2.py
+- Then train the model using main_lre.py
+
+Works on this docker:
+https://hub.docker.com/r/jonathanstaniforth/keras
+
+====================================================================================================
 
 This repo will contain the code for ICASSP 2019, speaker identifcation (http://www.robots.ox.ac.uk/~vgg/research/speakerID/).
 
@@ -99,6 +104,13 @@ The code and mode are available to download for commercial/research purposes und
   title        = "VoxCeleb: Large-scale Speaker Verification in the Wild.",
   journal      = "Computer Speech & Language",
   year         = "2019",
+}
+
+@article{krishna2020identification,
+  title={Identification of Indian Languages using Ghost-VLAD pooling.},
+  author={Krishna, DN and Patil, Ankita and Raj, MSP and Sai Prasad H. S and Garapati, Prabhu Aashish},
+  journal={CoRR},
+  year={2020}
 }
 
 ```
