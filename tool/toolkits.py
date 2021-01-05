@@ -1,6 +1,38 @@
 import os
 import numpy as np
 
+
+# trnlist, trnlb = toolkits.get_voxceleb2_datalist(args, path='../meta/voxlb2_train.txt')
+# vallist, vallb = toolkits.get_voxceleb2_datalist(args, path='../meta/voxlb2_val.txt')
+
+
+def load_from_kaldi_dir(args, part):
+    utt2feat_path = {}
+    with open(os.path.join(args.data_path, part, 'feats.scp'), 'r') as f:
+        lines = f.read().splitlines()
+        for l in lines:
+            utt2feat_path[l.split()[0]] = l.split()[1]
+    labels_file = ""
+    if args.task == "lre":
+        print("task is language recognition\n")
+        labels_file = "utt2lang"
+    elif args.task == "sre":
+        print("task is speaker recognition\n")
+        labels_file = "utt2spk"
+    utt2label = {}
+    with open(os.path.join(args.data_path, part, labels_file), 'r') as f:
+        lines = f.read().splitlines()
+        for l in lines:
+            utt2label[l.split()[0]] = l.split()[1]
+    labels = list(set(utt2label.values()))
+    print("all labels found were \n", labels, '\n')
+    label2idx = {}
+    for i, l in enumerate(labels):
+        label2idx[l] = i
+    print("Mapping: \n", label2idx)
+    data = [(utt2feat_path[i], label2idx[utt2label[i]]) for i in utt2feat_path.keys()]
+    return data
+
 def initialize_GPU(args):
     # Initialize GPUs
     import tensorflow as tf
@@ -10,20 +42,21 @@ def initialize_GPU(args):
     session = tf.Session(config=config)
     return session
 
+
 def get_chunks(l, n):
     # For item i in a range that is a length of l,
     for i in range(0, len(l), n):
         # Create an index range for l of n items:
-        yield l[i:i+n]
+        yield l[i:i + n]
 
 
 def debug_generator(generator):
     import cv2
     import pdb
     G = generator.next()
-    for i,img in enumerate(G[0]):
+    for i, img in enumerate(G[0]):
         path = '../sample/{}.jpg'.format(i)
-        img = np.asarray(img[:,:,::-1] + 128.0, dtype='uint8')
+        img = np.asarray(img[:, :, ::-1] + 128.0, dtype='uint8')
         cv2.imwrite(path, img)
 
 
@@ -102,6 +135,7 @@ def get_voxceleb2_datalist(args, path):
         f.close()
     return audiolist, labellist
 
+
 def calculate_eer(y, y_score):
     # y denotes groundtruth scores,
     # y_score denotes the prediction scores.
@@ -110,7 +144,7 @@ def calculate_eer(y, y_score):
     from scipy.interpolate import interp1d
 
     fpr, tpr, thresholds = roc_curve(y, y_score, pos_label=1)
-    eer = brentq(lambda x : 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
+    eer = brentq(lambda x: 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
     thresh = interp1d(fpr, thresholds)(eer)
     return eer, thresh
 

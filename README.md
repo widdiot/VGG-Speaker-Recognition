@@ -1,5 +1,12 @@
 # README #
 
+### Update
+This repo has been modiefied to load preprocessed data from kaldi directory, depending on the task. 
+- Generate Mfcc (or any other feats in kaldi).
+- Perform Vad.
+- Remove unvoiced frames and perform cmvn.
+- Then train the model using main2.py
+
 This repo will contain the code for ICASSP 2019, speaker identifcation (http://www.robots.ox.ac.uk/~vgg/research/speakerID/).
 
 This repo contains a Keras implementation of the paper,     
