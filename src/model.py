@@ -76,6 +76,29 @@ def amsoftmax_loss(y_true, y_pred, scale=30, margin=0.35):
     y_pred *= scale
     return K.categorical_crossentropy(y_true, y_pred, from_logits=True)
 
+def tuplemax_loss(y_true, y_pred):
+    """
+    pairwise tuplemax loss.
+    https://arxiv.org/pdf/1811.12290.pdf
+    Eq. (2)
+    """
+    print(y_true.shape)
+    print(y_pred.shape)
+    false_class_logits = tf.gather(params=y_pred,indices=tf.where(tf.math.equal(y_true,0)))
+    true_class_logits = tf.ones_like(false_class_logits) * tf.gather(params=y_pred,indices=tf.where(tf.math.equal(y_true,1)))
+    loss_array = tf.math.log(tf.math.exp(true_class_logits)/(tf.math.exp(true_class_logits)+tf.math.exp(false_class_logits)))
+    return -tf.math.reduce_mean(loss_array)
+
+def tuplemax_loss_batched(y_true, y_pred,batch_size=32,num_labels=10):
+    """
+    pairwise tuplemax loss.
+    https://arxiv.org/pdf/1811.12290.pdf
+    Eq. (2)
+    """
+    false_class_logits = tf.reshape(tf.gather_nd(params=y_pred,indices=tf.where(tf.math.equal(y_true,0))),[batch_size,num_labels-1])
+    true_class_logits = tf.broadcast_to(tf.reshape(tf.gather_nd(params=y_pred,indices=tf.where(tf.math.equal(y_true,1))),[batch_size,1]),[batch_size,num_labels-1])
+    loss_array = tf.math.log(tf.math.exp(true_class_logits)/(tf.math.exp(true_class_logits)+tf.math.exp(false_class_logits)))
+    return -tf.math.reduce_mean(loss_array)
 
 def vggvox_resnet2d_icassp(input_dim=(257, 250, 1), num_class=8631, mode='train', args=None):
     net=args.net
@@ -170,6 +193,16 @@ def vggvox_resnet2d_icassp(input_dim=(257, 250, 1), num_class=8631, mode='train'
                                bias_regularizer=keras.regularizers.l2(weight_decay),
                                name='prediction')(x_l2)
         trnloss = amsoftmax_loss
+
+    elif loss == 'tuplemax':
+        y = keras.layers.Dense(num_class,
+                               kernel_initializer='orthogonal',
+                               use_bias=False, trainable=True,
+                               kernel_regularizer=keras.regularizers.l2(weight_decay),
+                               bias_regularizer=keras.regularizers.l2(weight_decay),
+                               name='prediction')(x)
+        trnloss = tuplemax_loss_batched
+
 
     else:
         raise IOError('==> unknown loss.')

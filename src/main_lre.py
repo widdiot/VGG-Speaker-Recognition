@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--gpu', default='', type=str)
 parser.add_argument('--resume', default='', type=str)
 parser.add_argument('--task', default='lre', choices=['lre', 'sre'], type=str)
-parser.add_argument('--batch_size', default=64, type=int)
+parser.add_argument('--batch_size', default=32, type=int)
 parser.add_argument('--data_path', default='/home/gnani/LID/', type=str)
 parser.add_argument('--multiprocess', default=12, type=int)
 # set up network configuration.
@@ -32,7 +32,7 @@ parser.add_argument('--aggregation_mode', default='gvlad', choices=['avg', 'vlad
 parser.add_argument('--epochs', default=56, type=int)
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--warmup_ratio', default=0, type=float)
-parser.add_argument('--loss', default='softmax', choices=['softmax', 'amsoftmax'], type=str)
+parser.add_argument('--loss', default='softmax', choices=['softmax', 'amsoftmax','tuplemax'], type=str)
 parser.add_argument('--optimizer', default='adam', choices=['adam', 'sgd'], type=str)
 parser.add_argument('--ohem_level', default=0, type=int,
                     help='pick hard samples from (ohem_level * batch_size) proposals, must be > 1')
@@ -74,6 +74,7 @@ def main():
 
     # Generators
     trn_gen = generator.DataGenerator(partition['train'], labels['train'], **params)
+    val_gen = generator.DataGenerator(partition['val'], labels['val'], **params)
     network = model.vggvox_resnet2d_icassp(input_dim=params['dim'],
                                            num_class=params['n_classes'],
                                            mode='train', args=args)
@@ -100,11 +101,15 @@ def main():
                                                             args.loss, args.aggregation_mode, args.ohem_level))
 
     model_path, log_path = set_path(args)
+    with open(os.path.join(model_path,'label2idx'),'w') as f:
+        for key in l2i.keys():
+            f.write(key+' '+str(l2i[key])+'\n')
+
     normal_lr = keras.callbacks.LearningRateScheduler(step_decay)
     tbcallbacks = keras.callbacks.TensorBoard(log_dir=log_path, histogram_freq=0, write_graph=True, write_images=False,
                                               update_freq=args.batch_size * 16)
-    callbacks = [keras.callbacks.ModelCheckpoint(os.path.join(model_path, 'weights-{epoch:02d}-{acc:.3f}.h5'),
-                                                 monitor='loss',
+    callbacks = [keras.callbacks.ModelCheckpoint(os.path.join(model_path, 'weights-{epoch:02d}-{val_loss:.3f}.h5'),
+                                                 monitor='val_loss',
                                                  mode='min',
                                                  save_best_only=True),
                  normal_lr, tbcallbacks]
@@ -136,7 +141,8 @@ def main():
                               verbose=1)
 
     else:
-        network.fit_generator(trn_gen,
+        network.fit_generator(trn_gen, 
+                              validation_data=val_gen,
                               steps_per_epoch=int(len(partition['train'])//args.batch_size),
                               epochs=args.epochs,
                               max_queue_size=10,
