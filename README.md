@@ -10,6 +10,10 @@ This repo has been modiefied to load preprocessed data from kaldi directory, dep
 Works on this docker:
 https://hub.docker.com/r/jonathanstaniforth/keras
 
+Use hdf5 <3.0
+
+      pip install 'h5py<3.0.0'
+
 ====================================================================================================
 
 This repo will contain the code for ICASSP 2019, speaker identifcation (http://www.robots.ox.ac.uk/~vgg/research/speakerID/).
