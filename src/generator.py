@@ -8,10 +8,11 @@ import kaldiio
 class DataGenerator(keras.utils.Sequence):
     """Generates data for Keras"""
 
-    def __init__(self, list_IDs, labels, dim, mp_pooler, augmentation=True, batch_size=32, nfft=512, spec_len=250,
+    def __init__(self, list_IDs, labels, dim, mp_pooler, augmentation=True, tandem=False, batch_size=32, nfft=512, spec_len=250,
                  win_length=400, sampling_rate=16000, hop_length=160, n_classes=5994, shuffle=True, normalize=True):
         """Initialization"""
         self.dim = dim
+        self.tandem = tandem
         self.nfft = nfft
         self.sr = sampling_rate
         self.spec_len = spec_len
@@ -68,13 +69,17 @@ class DataGenerator(keras.utils.Sequence):
         # Generate data
         for i, ID in enumerate(list_IDs_temp):
             # Store sample
-            X[i, :, :, 0] = ut.load_kaldi_feat(ID, spec_len=self.spec_len)
+            if self.tandem:
+                #print("ID*******",ID)
+                X[i, :, :, 0] = ut.load_kaldi_feat_tandem(ID, spec_len=self.spec_len)    
+            else:
+                X[i, :, :, 0] = ut.load_kaldi_feat(ID, spec_len=self.spec_len)
             # Store class
             y[i] = self.labels[indexes[i]]
 
         return X, keras.utils.to_categorical(y, num_classes=self.n_classes)
 
-
+  
 def OHEM_generator(model, datagen, steps, propose_time, batch_size, dims, nclass):
     # propose_time : number of candidate batches.
     # prop : the number of hard batches for training.

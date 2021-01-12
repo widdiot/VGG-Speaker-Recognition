@@ -12,6 +12,12 @@ def load_from_kaldi_dir(args, part, label2idx=None):
         lines = f.read().splitlines()
         for l in lines:
             utt2feat_path[l.split()[0]] = l.split()[1]
+    if args.tandem:
+        utt2post_path = {}
+        with open(os.path.join(args.data_path, part, 'post.scp'), 'r') as f:
+            lines = f.read().splitlines()
+            for l in lines:
+                utt2post_path[l.split()[0]] = l.split()[1]
     labels_file = ""
     if args.task == "lre":
         print("task is language recognition\n")
@@ -31,12 +37,21 @@ def load_from_kaldi_dir(args, part, label2idx=None):
         for i, l in enumerate(labels):
             label2idx[l] = i
     print("Mapping: \n", label2idx)
-    data = ([],[])
-    for i in utt2feat_path.keys():
-        data[0].append(utt2feat_path[i])
-        data[1].append(label2idx[utt2label[i]])
-    print("head(X):",data[0][:4],"\nhead(Y):",data[1][:4])
-    return np.array(data[0]), np.array(data[1]), label2idx
+    if not args.tandem:
+        data = ([],[])
+        for i in utt2feat_path.keys():
+            data[0].append(utt2feat_path[i])
+            data[1].append(label2idx[utt2label[i]])
+        print("head(X):",data[0][:4],"\nhead(Y):",data[1][:4])
+        return np.array(data[0]), np.array(data[1]), label2idx
+    else:
+        labels = []
+        data = []
+        for i in utt2feat_path.keys():
+            data.append((utt2feat_path[i],utt2post_path[i]))
+            labels.append(label2idx[utt2label[i]])
+        print("head(X):",data[:4],"\nhead(Y):",labels[:4])
+        return data, np.array(labels), label2idx
 
 
 def initialize_GPU(args):

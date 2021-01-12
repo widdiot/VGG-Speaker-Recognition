@@ -20,6 +20,8 @@ parser.add_argument('--gpu', default='', type=str)
 parser.add_argument('--resume', default='', type=str)
 parser.add_argument('--task', default='lre', choices=['lre', 'sre'], type=str)
 parser.add_argument('--batch_size', default=32, type=int)
+parser.add_argument('--tandem', default=False, type=bool)
+parser.add_argument('--dim', default=214, type=int)
 parser.add_argument('--data_path', default='/home/gnani/LID/', type=str)
 parser.add_argument('--multiprocess', default=12, type=int)
 # set up network configuration.
@@ -55,7 +57,7 @@ def main():
     vallist, vallb, _ = toolkits.load_from_kaldi_dir(args, "test", l2i)
 
     # construct the data generator.
-    params = {'dim': (40, 500, 1),
+    params = {'dim': (args.dim, 500, 1),
               'mp_pooler': toolkits.set_mp(processes=args.multiprocess),
               'nfft': 512,
               'spec_len': 500,
@@ -63,13 +65,14 @@ def main():
               'hop_length': 160,
               'n_classes': 10,
               'sampling_rate': 8000,
+              'tandem': args.tandem,
               'batch_size': args.batch_size,
               'shuffle': True,
               'normalize': False,
               }
 
     # Datasets
-    partition = {'train': trnlist.flatten(), 'val': vallist.flatten()}
+    partition = {'train': trnlist, 'val': vallist}
     labels = {'train': trnlb.flatten(), 'val': vallb.flatten()}
 
     # Generators
@@ -201,8 +204,8 @@ def set_path(args):
                                 'bdim{args.bottleneck_dim}_ohemlevel{args.ohem_level}'.format(date, args=args))
     else:
         raise IOError('==> unknown aggregation mode.')
-    model_path = os.path.join('../model', exp_path)
-    log_path = os.path.join('../log', exp_path)
+    model_path = os.path.join('../model_tandem', exp_path)
+    log_path = os.path.join('../log_tandem', exp_path)
     if not os.path.exists(model_path): os.makedirs(model_path)
     if not os.path.exists(log_path): os.makedirs(log_path)
     return model_path, log_path

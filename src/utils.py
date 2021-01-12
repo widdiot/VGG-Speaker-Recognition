@@ -65,7 +65,6 @@ import kaldiio
 #     std = np.std(spec_mag, 0, keepdims=True)
 #     return (spec_mag - mu) / (std + 1e-5)
 
-
 def load_kaldi_feat(path, spec_len, mode='train'):
     feat = kaldiio.load_mat(path)
     feat_T = feat.T
@@ -81,3 +80,43 @@ def load_kaldi_feat(path, spec_len, mode='train'):
     # no need for normalization because, we perform normalization and vad in kaldi
     #print("feat_T_trunc:",feat_T_trunc.shape)
     return feat_T_trunc
+
+def load_kaldi_feat_tandem(paths, spec_len, mode='train'):
+    path = paths[0]
+    phone_path = paths[1]
+    #print(path,phone_path)
+    feat = kaldiio.load_mat(path)
+    feat_T = feat.T
+    freq, time = feat_T.shape
+    if phone_path:
+        post = kaldiio.load_mat(phone_path)
+        post_T = post.T
+        phones, ptime = post_T.shape
+        assert ptime == time, "phone length and mfcc length must be same"
+
+    if mode == 'train':
+        if time > spec_len:
+            randtime = np.random.randint(0, time - spec_len)
+            feat_T_trunc = feat_T[:, randtime:randtime + spec_len]
+            if phone_path:
+                post_T_trunc = post_T[:, randtime:randtime + spec_len]
+                tandem_feat = np.concatenate((feat_T_trunc, post_T_trunc), axis=0)
+        else:
+            feat_T_trunc = np.pad(feat_T, ((0, 0), (0, spec_len - time)), 'constant')
+            if phone_path:
+                post_T_trunc = np.pad(post_T, ((0, 0), (0, spec_len - time)), 'constant')
+                tandem_feat = np.concatenate((feat_T_trunc, post_T_trunc), axis=0)
+    else:
+        feat_T_trunc = feat_T
+        if phone_path:
+            post_T_trunc = post_T
+            tandem_feat = np.concatenate(feat_T_trunc, post_T_trunc, axis=0)
+    # no need for normalization because, we perform normalization and vad in kaldi
+    #print("feat_T_trunc:",feat_T_trunc.shape)
+    if phone_path:
+        return tandem_feat
+    return feat_T_trunc
+
+if __name__ == "__main__":
+    paths = ('/home/gnani/LID/mfcc_preproc/xvector_feats_FULL_mfcc.1.ark:67380979', '/home/gnani/LID/phone_posteriors/post.ark:292372205')
+    print(load_kaldi_feat_tandem(paths, 500).shape)
