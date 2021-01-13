@@ -63,14 +63,14 @@ def main():
     #       Get Model
     # ==================================
     # construct the data generator.
-    params = {'dim': (257, None, 1),
+    params = {'dim': (40, None, 1),
               'nfft': 512,
-              'spec_len': 250,
+              'spec_len': 500,
               'win_length': 400,
               'hop_length': 160,
-              'n_classes': 5994,
-              'sampling_rate': 16000,
-              'normalize': True,
+              'n_classes': 10,
+              'sampling_rate': 8000,
+              'normalize': False,
               }
 
     network_eval = model.vggvox_resnet2d_icassp(input_dim=params['dim'],

@@ -208,7 +208,15 @@ def vggvox_resnet2d_icassp(input_dim=(257, 250, 1), num_class=8631, mode='train'
         raise IOError('==> unknown loss.')
 
     if mode == 'eval':
-        y = keras.layers.Lambda(lambda x: keras.backend.l2_normalize(x, 1))(x)
+        if args.task == 'lre':
+            y = keras.layers.Dense(num_class, activation='softmax',
+                               kernel_initializer='orthogonal',
+                               use_bias=False, trainable=True,
+                               kernel_regularizer=keras.regularizers.l2(weight_decay),
+                               bias_regularizer=keras.regularizers.l2(weight_decay),
+                               name='prediction')(x)
+        elif args.task == 'sre':
+            y = keras.layers.Lambda(lambda x: keras.backend.l2_normalize(x, 1))(x)
 
     model = keras.models.Model(inputs, y, name='vggvox_resnet2D_{}_{}'.format(loss, aggregation))
 
