@@ -18,7 +18,7 @@ from kaldi.feat.mel import MelBanksOptions
 from kaldi.matrix import Vector, SubVector, DoubleVector, Matrix
 from kaldi.util.table import MatrixWriter, SequentialMatrixReader, RandomAccessPosteriorReader, SequentialWaveReader, \
     DoubleVectorWriter, SequentialVectorReader
-from kaldi.ivector import compute_vad_energy, VadEnergyOptions
+from kaldi.ivector import IvectorExtractor, IvectorExtractorUtteranceStats, compute_vad_energy, VadEnergyOptions, LogisticRegressionConfig, LogisticRegression
 from kaldi.feat.functions import sliding_window_cmn, SlidingWindowCmnOptions
 from kaldi.ivector import LogisticRegressionConfig, LogisticRegression
 from kaldi.feat.functions import sliding_window_cmn, SlidingWindowCmnOptions
@@ -27,16 +27,19 @@ from kaldi.util.io import xopen
 from kaldi.matrix.common import MatrixTransposeType
 import time
 import kaldiio
-import model
+import model_emb
+import math
 # ===========================================
 #        Parse the argument
 # ===========================================
 import argparse
 
-#../model_tandem/gvlad_softmax/2021-02-07_resnet34s_bs16_adam_lr0.001_vlad10_ghost2_bdim512_ohemlevel0/weights-14-0.501.h5
 
-#../model_tandem/gvlad_softmax/2021-02-07_resnet34s_bs16_adam_lr0.001_vlad10_ghost2_bdim512_ohemlevel0/label2idx
+#/home/repos/gnani_lre/trell/hin_IN/b8cded16b02de3c7bece4fa64b794e01560096f8_apiservice_20201130160732215437.wa
 
+#/home/repos/gnani_lre/trell/ben_IN/b8cded16b02de3c7bece4fa64b794e01560096f8_apiservice_20201130125658816940.wav
+
+#/home/repos/gnani_lre/trell/tel_IN/b8cded16b02de3c7bece4fa64b794e01560096f8_apiservice_20201201055513068126.wav
 
 parser = argparse.ArgumentParser()
 # set up training configuration.
@@ -46,7 +49,7 @@ parser.add_argument('--task', default='lre', choices=['lre', 'sre'], type=str)
 parser.add_argument('--batch_size', default=1, type=int)
 parser.add_argument('--labels', default='/home/repos/VGG-Speaker-Recognition/result/8lang/label2idx', type=str)
 parser.add_argument('--cmvn', default='/home/repos/VGG-Speaker-Recognition/result/spont/cmvn.ark', type=str)
-parser.add_argument('--data_path', default='/home/repos/gnani_lre/trell/hin_IN/b8cded16b02de3c7bece4fa64b794e01560096f8_apiservice_20201201061349561550.wav', type=str)
+parser.add_argument('--data_path', default='/home/repos/gnani_lre/trell/tel_IN/b8cded16b02de3c7bece4fa64b794e01560096f8_apiservice_20201201055513068126.wav', type=str)
 # set up network configuration.
 parser.add_argument('--net', default='resnet34s', choices=['resnet34s', 'resnet34l'], type=str)
 parser.add_argument('--ghost_cluster', default=2, type=int)
@@ -71,7 +74,7 @@ params = {'dim': (40, None, 1),
           'normalize': False,
           }
 
-network_eval = model.vggvox_resnet2d_icassp(input_dim=params['dim'],
+network_eval = model_emb.vggvox_resnet2d_icassp(input_dim=params['dim'],
                                             num_class=params['n_classes'],
                                             mode='eval', args=args)
 
@@ -91,7 +94,6 @@ if args.resume:
     # load the model if the imag_model == real_model.
     if os.path.isfile(args.resume):
         network_eval.load_weights(os.path.join(args.resume), by_name=True)
-#        result_path = set_result_path(args)
         print('==> successfully loading model {}.'.format(args.resume))
     else:
         raise IOError("==> no checkpoint found at '{}'".format(args.resume))
@@ -125,6 +127,26 @@ hires_mfcc_opts.num_ceps = 40
 hires_mfcc_opts.mel_opts = hires_mb_opts
 hires_mfcc_opts.use_energy = False
 
+############## LOGISTIC REGRESSION MODELS #################
+language_classifier = LogisticRegression()
+ki = xopen("/home/repos/VGG-Speaker-Recognition/result/telugu-hindi-bengali/logistic_regression")
+language_classifier.read(ki.stream(),ki.binary)  
+
+mean = Vector()
+ki = xopen('/home/repos/VGG-Speaker-Recognition/result/telugu-hindi-bengali/mean.vec')
+mean.read_(ki.stream(), ki.binary)
+
+lda = Matrix()
+ki = xopen('/home/repos/VGG-Speaker-Recognition/result/telugu-hindi-bengali/transform.mat')
+lda.read_(ki.stream(), ki.binary)
+
+##### LABELS ##########
+
+with open("/home/repos/VGG-Speaker-Recognition/result/telugu-hindi-bengali/langs") as f:
+    lines = f.read().splitlines()
+i2l = {}
+for l in lines:
+    i2l[int(l.split()[1])] = l.split()[0]
 
 
 def lid_module(key, audio_file, start, end):
@@ -140,16 +162,19 @@ def lid_module(key, audio_file, start, end):
     X = hi_feat.T
     X = np.expand_dims(np.expand_dims(X, 0), -1)
     v = network_eval.predict(X)
-    print(key, "::", i2l[v.argmax()])
-
-
-def set_result_path(args):
-    model_path = args.resume
-    exp_path = model_path.split(os.sep)
-    result_path = os.path.join('../result', exp_path[2], exp_path[3])
-    if not os.path.exists(result_path): os.makedirs(result_path)
-    return result_path
-
+    #print(v.shape)
+    v = Vector(v[0,:])
+    v.add_vec_(-1.0, mean)
+    rows, cols = lda.num_rows, lda.num_cols
+    vec_dim = v.dim
+    vec_out = Vector(150)
+    vec_out.copy_col_from_mat_(lda, vec_dim)
+    vec_out.add_mat_vec_(1.0, lda.range(0, rows, 0, vec_dim), MatrixTransposeType.NO_TRANS, v, 1.0)
+    norm = vec_out.norm(2.0)
+    ratio = norm / math.sqrt(vec_out.dim)
+    vec_norm = vec_out.scale_(1.0 / ratio)
+    output = language_classifier.get_log_posteriors_vector(vec_norm)
+    print(i2l[output.max_index()[1]])
 
 if __name__ == "__main__":
     #wavs = glob.glob(args.data_path + '*/*.wav')
