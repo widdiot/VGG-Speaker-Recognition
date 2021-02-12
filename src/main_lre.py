@@ -4,7 +4,8 @@ import os
 import sys
 import keras
 import numpy as np
-
+#from kaldi.transform.cmvn import Cmvn
+import kaldiio
 np.seterr(all='raise')
 
 sys.path.append('../tool')
@@ -16,14 +17,16 @@ import toolkits
 import argparse
 parser = argparse.ArgumentParser()
 # set up training configuration.
-parser.add_argument('--gpu', default='', type=str)
+parser.add_argument('--gpu', default='0', type=str)
 parser.add_argument('--resume', default='', type=str)
 parser.add_argument('--task', default='lre', choices=['lre', 'sre'], type=str)
-parser.add_argument('--batch_size', default=32, type=int)
+parser.add_argument('--batch_size', default=16, type=int)
 parser.add_argument('--tandem', default=False, type=bool)
-parser.add_argument('--dim', default=214, type=int)
+parser.add_argument('--dim', default=40, type=int)
 parser.add_argument('--data_path', default='/home/gnani/LID/', type=str)
 parser.add_argument('--multiprocess', default=12, type=int)
+parser.add_argument('--cmvn', default='/home/gnani/LID/train/cmvn.ark', type=str)
+parser.add_argument('--post_cmvn',default='',type=str)
 # set up network configuration.
 parser.add_argument('--net', default='resnet34s', choices=['resnet34s', 'resnet34l'], type=str)
 parser.add_argument('--ghost_cluster', default=2, type=int)
@@ -31,7 +34,7 @@ parser.add_argument('--vlad_cluster', default=10, type=int)
 parser.add_argument('--bottleneck_dim', default=512, type=int)
 parser.add_argument('--aggregation_mode', default='gvlad', choices=['avg', 'vlad', 'gvlad'], type=str)
 # set up learning rate, training loss and optimizer.
-parser.add_argument('--epochs', default=56, type=int)
+parser.add_argument('--epochs', default=15, type=int)
 parser.add_argument('--lr', default=0.001, type=float)
 parser.add_argument('--warmup_ratio', default=0, type=float)
 parser.add_argument('--loss', default='softmax', choices=['softmax', 'amsoftmax','tuplemax'], type=str)
@@ -53,22 +56,45 @@ def main():
     #       Get Train/Val.
     # ==================================
 
-    trnlist, trnlb, l2i = toolkits.load_from_kaldi_dir(args, "train")
-    vallist, vallb, _ = toolkits.load_from_kaldi_dir(args, "test", l2i)
+    trnlist, trnlb, l2i = toolkits.load_from_kaldi_dir(args, "train", min_len=300)
+    vallist, vallb, _ = toolkits.load_from_kaldi_dir(args, "val", min_len=300, label2idx=l2i)
+    if args.cmvn:   
+        cmvn_stats = kaldiio.load_mat(args.cmvn)
+        mean_stats = cmvn_stats[0,:-1]
+        count = cmvn_stats[0,-1]
+        offset = np.expand_dims(mean_stats,0)/count
+        print("offset",offset)
+        CMVN = offset
+
+    else:
+        CMVN = None
+
+    if args.post_cmvn:
+        cmvn_stats = kaldiio.load_mat(args.post_cmvn)
+        mean_stats = cmvn_stats[0,:-1]
+        count = cmvn_stats[0,-1]
+        offset = np.expand_dims(mean_stats,0)/count
+        print("offset",offset)
+        POSTCMVN = offset
+
+    else:
+        POSTCMVN = None
 
     # construct the data generator.
-    params = {'dim': (args.dim, 500, 1),
+    params = {'dim': (args.dim, 300, 1),
               'mp_pooler': toolkits.set_mp(processes=args.multiprocess),
               'nfft': 512,
-              'spec_len': 500,
+              'spec_len': 300,
               'win_length': 400,
               'hop_length': 160,
-              'n_classes': 10,
-              'sampling_rate': 8000,
+              'n_classes': 8,
+              'sampling_rate': 16000,
               'tandem': args.tandem,
               'batch_size': args.batch_size,
               'shuffle': True,
               'normalize': False,
+              'cmvn': CMVN,
+              'postcmvn': POSTCMVN
               }
 
     # Datasets

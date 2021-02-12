@@ -4,7 +4,7 @@ import os
 import sys
 import numpy as np
 import sys
-
+import kaldiio
 sys.path.append('../tool')
 import toolkits
 #import utils as ut
@@ -26,7 +26,6 @@ from kaldi.matrix import Vector, SubVector, DoubleVector, Matrix
 from kaldi.util.io import xopen
 from kaldi.matrix.common import MatrixTransposeType
 import time
-import model
 # ===========================================
 #        Parse the argument
 # ===========================================
@@ -35,12 +34,14 @@ import argparse
 parser = argparse.ArgumentParser()
 # set up training configuration.
 parser.add_argument('--gpu', default='', type=str)
-parser.add_argument('--resume', default='/home/repos/VGG-Speaker-Recognition/result/softmax_mfcc/weights-12-0.417.h5', type=str)
+parser.add_argument('--resume', default='../model_tandem/gvlad_softmax/2021-02-06_resnet34s_bs16_adam_lr0.001_vlad10_ghost2_bdim512_ohemlevel0/', type=str)
 parser.add_argument('--task', default='lre', choices=['lre', 'sre'], type=str)
 parser.add_argument('--batch_size', default=1, type=int)
-parser.add_argument('--labels', default='/home/repos/VGG-Speaker-Recognition/result/softmax_mfcc/label2idx', type=str)
-parser.add_argument('--data_path', default='/home/repos/gnani_lre/trell2/', type=str)
+parser.add_argument('--labels', default='../model_tandem/gvlad_softmax/2021-02-06_resnet34s_bs16_adam_lr0.001_vlad10_ghost2_bdim512_ohemlevel0/label2idx', type=str)
+parser.add_argument('--data_path', default='', type=str)
+parser.add_argument('--file_list', default='/home/gnani/LID/TEST/test_files', type=str)
 # set up network configuration.
+parser.add_argument('--cmvn', default='/home/gnani/LID/train/cmvn.ark', type=str)
 parser.add_argument('--net', default='resnet34s', choices=['resnet34s', 'resnet34l'], type=str)
 parser.add_argument('--ghost_cluster', default=2, type=int)
 parser.add_argument('--vlad_cluster', default=10, type=int)
@@ -64,10 +65,19 @@ params = {'dim': (40, None, 1),
           'normalize': False,
           }
 
+toolkits.initialize_GPU(args)
+import model
 network_eval = model.vggvox_resnet2d_icassp(input_dim=params['dim'],
                                             num_class=params['n_classes'],
                                             mode='eval', args=args)
-
+import kaldiio
+if args.cmvn:
+    cmvn_stats = kaldiio.load_mat(args.cmvn)
+    mean_stats = cmvn_stats[0,:-1]
+    count = cmvn_stats[0,-1]
+    offset = np.expand_dims(mean_stats,0)/count
+    print("offset",offset)
+    CMVN = offset
 #print(network_eval.summary())
 # ==> load pre-trained model ???
 if args.resume:
@@ -129,25 +139,14 @@ def lid_module(key, audio_file, start, end):
     hires_mfcc = Mfcc(hires_mfcc_opts)
     wav = SequentialWaveReader(wav_spc).value()
     hi_feat = hires_mfcc.compute_features(wav.data()[0], wav.samp_freq, 1.0)
-    vad = Vector(compute_vad_energy(vopts, hi_feat))
-    vad_dim = 0
-    for i in range(0, vad.dim):
-        if vad.data[i] != 0.0:
-            vad_dim += 1
-    dnn_feats = Matrix(hi_feat)
-    sliding_window_cmn(sliding_windows_opts, hi_feat, dnn_feats)
-    dnn_vad_feats = Matrix(vad_dim, dnn_feats.num_cols)
-    index = 0
-    for i in range(0, dnn_feats.num_rows):
-        if vad.data[i] != 0.0:
-            dnn_vad_feats.copy_row_from_vec_(dnn_feats.row(i), row=index)
-            index += 1
-    X = dnn_vad_feats.numpy().T
+    hi_feat = hi_feat.numpy() - CMVN
+    X = hi_feat.T
     X = np.expand_dims(np.expand_dims(X, 0), -1)
-    print(X.shape)
+    #print(X.shape)
     v = network_eval.predict(X)
     #print(v)
-    print(key, "::", i2l[v.argmax()])
+    #print(key, "::", i2l[v.argmax()])
+    return i2l[v.argmax()]
 
 
 def set_result_path(args):
@@ -159,14 +158,32 @@ def set_result_path(args):
 
 
 if __name__ == "__main__":
-    wavs = glob.glob(args.data_path + '*/*.wav')
-    for audio in wavs:
-        utt = audio.split('/')[-1][:-4]
-        Segments, _ = save_segs.build_response(audio)
-        for segment in Segments:
-            seg_key = utt + "-" + str("{0:.2f}".format(float(segment[0]) / 100)).zfill(7).replace(".", "") + "-" + str(
-                "{0:.2f}".format(float(segment[1]) / 100)).zfill(7).replace(".", "")
-            start_time = float(segment[0]) / 100
-            end_time = float(segment[1]) / 100
-            data = {"AudioFile": audio, "startTime": start_time, "endTime": end_time}
-            lid_module(seg_key, data["AudioFile"], data["startTime"], data["endTime"])
+    if args.data_path:
+    	wavs = glob.glob(args.data_path + '*/*.wav')
+    	for audio in wavs:
+            utt = audio.split('/')[-1][:-4]
+       	    Segments, _ = save_segs.build_response(audio)
+            for segment in Segments:
+                seg_key = utt + "-" + str("{0:.2f}".format(float(segment[0]) / 100)).zfill(7).replace(".", "") + "-" + str("{0:.2f}".format(float(segment[1]) / 100)).zfill(7).replace(".", "")
+                start_time = float(segment[0]) / 100
+                end_time = float(segment[1]) / 100
+                data = {"AudioFile": audio, "startTime": start_time, "endTime": end_time}
+                lid_module(seg_key, data["AudioFile"], data["startTime"], data["endTime"])
+    elif args.file_list:
+        with open(args.file_list) as f:
+            file_paths = f.read().splitlines()
+        f = open('/'.join(args.file_list.split('/')[:-1])+'/output','w')
+        for audio in file_paths:
+            if not os.path.exists(audio):
+                print("path not found:", audio)
+            else:
+                utt = audio.split('/')[-1][:-4]
+                Segments, _ = save_segs.build_response(audio)
+                for segment in Segments:
+                    seg_key = utt + "-" + str("{0:.2f}".format(float(segment[0]) / 100)).zfill(7).replace(".", "") + "-" + str("{0:.2f}".format(float(segment[1]) / 100)).zfill(7).replace(".", "")
+                    start_time = float(segment[0]) / 100
+                    end_time = float(segment[1]) / 100
+                    data = {"AudioFile": audio, "startTime": start_time, "endTime": end_time}
+                    result = lid_module(seg_key, data["AudioFile"], data["startTime"], data["endTime"])
+                    f.write(seg_key+" "+result+"\n")
+        f.close()

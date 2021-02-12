@@ -9,7 +9,7 @@ class DataGenerator(keras.utils.Sequence):
     """Generates data for Keras"""
 
     def __init__(self, list_IDs, labels, dim, mp_pooler, augmentation=True, tandem=False, batch_size=32, nfft=512, spec_len=250,
-                 win_length=400, sampling_rate=16000, hop_length=160, n_classes=5994, shuffle=True, normalize=True):
+                 win_length=400, sampling_rate=16000, hop_length=160, n_classes=5994, shuffle=True, normalize=True, cmvn=None, postcmvn=None):
         """Initialization"""
         self.dim = dim
         self.tandem = tandem
@@ -17,6 +17,8 @@ class DataGenerator(keras.utils.Sequence):
         self.sr = sampling_rate
         self.spec_len = spec_len
         self.normalize = normalize
+        self.cmvn = cmvn
+        self.postcmvn = postcmvn
         self.mp_pooler = mp_pooler
         self.win_length = win_length
         self.hop_length = hop_length
@@ -71,12 +73,13 @@ class DataGenerator(keras.utils.Sequence):
             # Store sample
             if self.tandem:
                 #print("ID*******",ID)
-                X[i, :, :, 0] = ut.load_kaldi_feat_tandem(ID, spec_len=self.spec_len)    
+                X[i, :, :, 0] = ut.load_kaldi_feat_tandem(ID, spec_len=self.spec_len,cmvn=self.cmvn,postcmvn=self.postcmvn)    
             else:
-                X[i, :, :, 0] = ut.load_kaldi_feat(ID, spec_len=self.spec_len)
+                X[i, :, :, 0] = ut.load_kaldi_feat(ID, spec_len=self.spec_len,cmvn=self.cmvn)
             # Store class
             y[i] = self.labels[indexes[i]]
-
+            #with open("idx2label","a") as f:
+            #    f.write(ID+" "+str(y[i])+"\n")
         return X, keras.utils.to_categorical(y, num_classes=self.n_classes)
 
   

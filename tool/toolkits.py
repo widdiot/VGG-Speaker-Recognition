@@ -6,12 +6,19 @@ import numpy as np
 # vallist, vallb = toolkits.get_voxceleb2_datalist(args, path='../meta/voxlb2_val.txt')
 
 
-def load_from_kaldi_dir(args, part, label2idx=None):
+def load_from_kaldi_dir(args, part, min_len=200, label2idx=None):
+    utt2num_frames = {}
+    with open(os.path.join(args.data_path, part, 'utt2num_frames'), 'r') as f:
+        lines = f.read().splitlines()
+        for l in lines:
+            utt2num_frames[l.split()[0]] = int(l.split()[1])
     utt2feat_path = {}
     with open(os.path.join(args.data_path, part, 'feats.scp'), 'r') as f:
         lines = f.read().splitlines()
         for l in lines:
-            utt2feat_path[l.split()[0]] = l.split()[1]
+            utt, feat = l.split()
+            if utt2num_frames[utt] > min_len:
+                utt2feat_path[utt] = feat
     if args.tandem:
         utt2post_path = {}
         with open(os.path.join(args.data_path, part, 'post.scp'), 'r') as f:

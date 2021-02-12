@@ -1,13 +1,14 @@
 # Third Party
 # import librosa
 import numpy as np
+#from kaldi.matrix import Matrix
 # import time as timelib
 # import scipy
 # import soundfile as sf
 # import scipy.signal as sps
 # from scipy import interpolate
 import kaldiio
-
+#from kaldi.transform.cmvn import Cmvn
 
 # ===============================================
 #       code from Arsha for loading data.
@@ -65,8 +66,10 @@ import kaldiio
 #     std = np.std(spec_mag, 0, keepdims=True)
 #     return (spec_mag - mu) / (std + 1e-5)
 
-def load_kaldi_feat(path, spec_len, mode='train'):
+def load_kaldi_feat(path, spec_len, mode='train', cmvn=None):
     feat = kaldiio.load_mat(path)
+    if cmvn is not None:
+        feat = feat-cmvn
     feat_T = feat.T
     freq, time = feat_T.shape
     if mode == 'train':
@@ -81,41 +84,44 @@ def load_kaldi_feat(path, spec_len, mode='train'):
     #print("feat_T_trunc:",feat_T_trunc.shape)
     return feat_T_trunc
 
-def load_kaldi_feat_tandem(paths, spec_len, mode='train'):
-    path = paths[0]
-    phone_path = paths[1]
+def load_kaldi_feat_tandem(paths, spec_len, mode='train',cmvn=None,postcmvn=None):
+    path = paths[0]    #mfcc
+    phone_path = paths[1]    #posteriors
     #print(path,phone_path)
     feat = kaldiio.load_mat(path)
+    if cmvn is not None:
+        feat = feat-cmvn
     feat_T = feat.T
     freq, time = feat_T.shape
-    if phone_path:
-        post = kaldiio.load_mat(phone_path)
-        post_T = post.T
-        phones, ptime = post_T.shape
-        assert ptime == time, "phone length and mfcc length must be same"
-
+    post = kaldiio.load_mat(phone_path)
+    if postcmvn is not None:
+        post = post-postcmvn
+    post_T = post.T
+    phones, ptime = post_T.shape
+ #       assert ptime == time, "phone length and mfcc length must be same: mfcc= %s, post=%s" %(path, phone_path)
+    if ptime != time:
+        time = min(ptime,time)
+        feat_T = feat_T[:,:time]
+        post_T = post_T[:,:time]
+            
+    assert feat_T.shape[1] == post_T.shape[1], "phone length and mfcc length must be same: mfcc= %s, post=%s" %(path, phone_path)
     if mode == 'train':
         if time > spec_len:
             randtime = np.random.randint(0, time - spec_len)
             feat_T_trunc = feat_T[:, randtime:randtime + spec_len]
-            if phone_path:
-                post_T_trunc = post_T[:, randtime:randtime + spec_len]
-                tandem_feat = np.concatenate((feat_T_trunc, post_T_trunc), axis=0)
+            post_T_trunc = post_T[:, randtime:randtime + spec_len]
+            tandem_feat = np.concatenate((feat_T_trunc, post_T_trunc), axis=0)
         else:
             feat_T_trunc = np.pad(feat_T, ((0, 0), (0, spec_len - time)), 'constant')
-            if phone_path:
-                post_T_trunc = np.pad(post_T, ((0, 0), (0, spec_len - time)), 'constant')
-                tandem_feat = np.concatenate((feat_T_trunc, post_T_trunc), axis=0)
+            post_T_trunc = np.pad(post_T, ((0, 0), (0, spec_len - time)), 'constant')
+            tandem_feat = np.concatenate((feat_T_trunc, post_T_trunc), axis=0)
     else:
         feat_T_trunc = feat_T
-        if phone_path:
-            post_T_trunc = post_T
-            tandem_feat = np.concatenate(feat_T_trunc, post_T_trunc, axis=0)
+        post_T_trunc = post_T
+        tandem_feat = np.concatenate(feat_T_trunc, post_T_trunc, axis=0)
     # no need for normalization because, we perform normalization and vad in kaldi
     #print("feat_T_trunc:",feat_T_trunc.shape)
-    if phone_path:
-        return tandem_feat
-    return feat_T_trunc
+    return tandem_feat
 
 if __name__ == "__main__":
     paths = ('/home/gnani/LID/mfcc_preproc/xvector_feats_FULL_mfcc.1.ark:67380979', '/home/gnani/LID/phone_posteriors/post.ark:292372205')
